@@ -54,9 +54,9 @@ eval_config: EvalConfig = configue.load(
     sub_path="eval_config",
 )
 evaluator = SequenceClassificationEval(eval_config)
-evaluator.train()      # To fine-tune the model on the chosen task    
-evaluator.validate()   # To evaluate the model on the validation set
-evaluator.test()       # To evaluate the model on the test set
+evaluator.train() # Fine-tune on the target task
+evaluator.validate() # Evaluate on the validation set
+evaluator.test() # Evaluate on the test set
 ```
 
 
@@ -74,7 +74,7 @@ dataset = xnli()
 
 ## Configuration files
 
-Examples of configuration files are available in the [configuration/](configuration/) folder.
+Examples of configuration files are available in the [configs/](configs/) folder.
 
 
 ## Citation
