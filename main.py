@@ -4,10 +4,8 @@ import subprocess
 
 import configue
 import fire
-import pandas as pd
-from torch.utils.tensorboard import SummaryWriter
 
-from optimus.evaluator.eval_tasks import (
+from encodeval.eval_tasks import (
     EvalConfig,
     SequenceClassificationEval,
     SequenceRegressionEval,
@@ -44,7 +42,7 @@ def main(config_file: str = None, model_path: str = None):
             if os.path.exists(eval_config.tr_args.output_dir) and len(os.listdir(eval_config.tr_args.output_dir)) > 0:
                 print(f"A fine-tuned model already exists for this configuration at {eval_config.tr_args.output_dir}, skipping training") 
             else:
-                evaluator.train()      
+                evaluator.train()
         else:
             print("Training disabled, skipping training")
         
