@@ -3,16 +3,32 @@ from dataclasses import dataclass
 import subprocess
 from typing import Callable, Dict, Literal
 
-from peft import LoraConfig, get_peft_model
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.losses import TripletDistanceMetric
 from transformers import set_seed
 
-from optimus.trainer.model.tools import ModelTools
+from encodeval.tools import ModelTools
 
 
 @dataclass
 class EvalConfig:
+    """
+    A dataclass to hold and manage configuration for evaluation runs.
+
+    Attributes:
+        model_class: Class or callable to instantiate the model.
+        model_kwargs: Dictionary of keyword arguments for model instantiation.
+        tokenizer_class: Class or callable to instantiate the tokenizer.
+        tokenizer_kwargs: Dictionary of keyword arguments for tokenizer instantiation.
+        tr_args_class: Class to instantiate training arguments.
+        tr_args_kwargs: Dictionary of keyword arguments for training arguments.
+        max_length: Maximum sequence length (optional, inferred from model if None).
+        load_dataset_from_custom_fn: Optional callable that loads a dataset.
+        task_type: Task type identifier (SC, SR, TC, or IR).
+        loss_fn: Optional callable for the training loss function.
+        loss_kwargs: Optional keyword arguments for the loss function.
+    """
+
     model_class: Callable = None
     model_kwargs: Dict = None
     tokenizer_class: Callable = None
@@ -21,25 +37,24 @@ class EvalConfig:
     tr_args_kwargs: Dict = None
     max_length: int = None
     load_dataset_from_custom_fn: Callable = None
-    dataset = None
     task_type: Literal["SC", "SR", "TC", "IR"] = None
-    mteb_kwargs: Dict = None
-    connection_layer: int = None
-    lora_config: LoraConfig = None
-    mlm_probability: float = 0.5
-    whole_word_masking: bool = False
     loss_fn: Callable = None
     loss_kwargs: Dict = None
 
     def __post_init__(self):
-        # Load model    
+        """
+        Initializes the evaluation configuration:
+        - Loads the model and tokenizer
+        - Sets training/evaluation parameters
+        - Configures dataset and loss function
+        - Prepares output/logging directories
+        """
+        # Extract and remove device and dtype from model kwargs
         self.model_dtype = self.model_kwargs.pop("dtype")
         self.device = self.model_kwargs.pop("device")
-        ft_model_config_dir = (
-            self.model_kwargs.pop("ft_model_config_dir") 
-            if "ft_model_config_dir" in self.model_kwargs else None
-        )
 
+        # Handle loading fine-tuned model from disk if specified
+        ft_model_config_dir = self.model_kwargs.pop("ft_model_config_dir", None)
         if ft_model_config_dir is not None:
             ft_model_path = f"{os.environ['EVAL_MODEL_PATH']}/evaluation/weights/{self.task_type}/{ft_model_config_dir}"
             print(f"Loading fine-tuned model at {ft_model_path}")
@@ -49,35 +64,28 @@ class EvalConfig:
                 self.model_kwargs["model_name_or_path"] = ft_model_path
                
         self.load_model()
-        
-        # Print model weights format
+
+        # Show the device and dtype of model parameters
         for _, param in self.model.named_parameters():
             print(f"Model weights stored on {param.device} in {param.dtype}")
             break
 
-        # Load tokenizer
+        # Initialize tokenizer
         self.tokenizer = self.tokenizer_class.from_pretrained(**self.tokenizer_kwargs)
 
-        # Set-up LoRA training if relevant and print model summary
-        if self.lora_config is not None:
-            print("Setting LoRA training")
-            self.set_lora_training()
-        else:
-            ModelTools.model_summary(self.model)
+        # Print model summary (number of parameters, structure, etc.)
+        ModelTools.model_summary(self.model)
 
-        # Set max sequence length
+        # Set and adjust maximum sequence length
         model_max_length = (
             self.model[0].max_seq_length if isinstance(self.model, SentenceTransformer) 
             else self.model.config.max_position_embeddings
         )
-        self.max_length = (
-            model_max_length if self.max_length is None
-            else min(model_max_length, self.max_length)
-        )
-        self.max_length = round(0.95 * self.max_length)
+        self.max_length = model_max_length if self.max_length is None else min(model_max_length, self.max_length)
+        self.max_length = round(0.95 * self.max_length)  # Apply 5% buffer
         print(f"Max sequence length set to {self.max_length}")
 
-        # Check special tokens
+        # Sync special tokens from model config to tokenizer
         if hasattr(self.model, "config"):
             for attr in [
                 "bos_token", "bos_token_id", 
@@ -87,31 +95,25 @@ class EvalConfig:
             ]:
                 if hasattr(self.model.config, attr):
                     setattr(self.tokenizer, attr, getattr(self.model.config, attr))
-        
+
+        # Fallback token setup
         if self.tokenizer.pad_token is None:
             print("Setting PAD token as EOS token")
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         if self.tokenizer.mask_token is None:
             print("Model does not have a mask token")
 
-        # Set training arguments      
-        self.callbacks = ( 
-            self.tr_args_kwargs.pop("callbacks") 
-            if "callbacks" in self.tr_args_kwargs else None
-        )
-        output_subdir = ( 
-            self.tr_args_kwargs.pop("output_subdir") 
-            if "output_subdir" in self.tr_args_kwargs else ""
-        )  
-        train_batch_size = (
-            self.tr_args_kwargs.pop("train_batch_size") 
-            if "train_batch_size" in self.tr_args_kwargs else None
-        )
+        # Initialize training arguments
+        self.callbacks = self.tr_args_kwargs.pop("callbacks", None)
+        output_subdir = self.tr_args_kwargs.pop("output_subdir", "")
+        train_batch_size = self.tr_args_kwargs.pop("train_batch_size", None)
         self.tr_args = self.tr_args_class(**self.tr_args_kwargs)
 
+        # Ensure CPU-only mode if specified
         if self.device == "cpu":
             self.tr_args.use_cpu = True
-        
+
+        # Adjust gradient accumulation if custom batch size is provided
         if train_batch_size is not None:
             gradient_accumulation_steps = (
                 train_batch_size / (self.tr_args.n_gpu * self.tr_args.per_device_train_batch_size)
@@ -121,23 +123,25 @@ class EvalConfig:
                     gradient_accumulation_steps * self.tr_args.per_device_train_batch_size
                 )
             self.tr_args.gradient_accumulation_steps = max(1, int(gradient_accumulation_steps))
-        
-        # Check loss arguments
+
+        # Convert loss distance metric string to enum if applicable
         if self.loss_kwargs is not None:
             if "distance_metric" in self.loss_kwargs and isinstance(self.loss_kwargs["distance_metric"], str):
-                self.loss_kwargs["distance_metric"] = getattr(TripletDistanceMetric, self.loss_kwargs["distance_metric"])
+                self.loss_kwargs["distance_metric"] = getattr(
+                    TripletDistanceMetric, self.loss_kwargs["distance_metric"]
+                )
 
-        # Set eval seed
+        # Set evaluation seed
         set_seed(self.tr_args.seed)
 
-        # Load dataset
+        # Load dataset (from user-defined loader if provided)
         if self.load_dataset_from_custom_fn is not None:
             self.dataset = self.load_dataset_from_custom_fn()
             self.dataset_name = self.load_dataset_from_custom_fn.__name__
         else:
             self.dataset_name = ""
 
-        # Specify output, logs and results dirs
+        # Prepare output/log directories
         model_name = os.environ["EVAL_MODEL_PATH"].split("/")[-1]
         output_dir = self.tr_args.output_dir        
         output_subdir = (
@@ -147,47 +151,44 @@ class EvalConfig:
         self.tr_args.output_dir = f"{os.environ['EVAL_MODEL_PATH']}/evaluation/weights/{output_subdir}"
         self.tr_args.logging_dir = f"{os.environ['EVAL_MODEL_PATH']}/evaluation/logs/{output_subdir}"
         self.results_dir = f"{output_dir}/{model_name}/{output_subdir}"
-        
-        # Clear logging dir
+
+        # Clear old logs if logging directory is not empty
         if os.path.exists(self.tr_args.logging_dir) and len(os.listdir(self.tr_args.logging_dir)) > 0:
             subprocess.run(f"rm {self.tr_args.logging_dir}/*", shell=True, check=True)
-        
+
     def load_model(self):
+        """
+        Loads the model using the specified class and keyword arguments.
+        Converts model to the specified dtype and device.
+        """
         if self.model_class.__name__ == "SentenceTransformer":
             self.model = self.model_class(**self.model_kwargs)
         else:
             self.model = self.model_class.from_pretrained(**self.model_kwargs)
         self.model = self.model.to(self.model_dtype).to(self.device)
 
-    def set_lora_training(self):
-        model_family_name = (
-            self.model._first_module().auto_model.__class__.__name__ 
-            if isinstance(self.model, SentenceTransformer) 
-            else self.model.__class__.__name__
-        )
-        if model_family_name.startswith("Optimus"):
-            self.lora_config.target_modules = ["q_proj", "k_proj", "v_proj"]
-        elif model_family_name.startswith("XLMRoberta"):
-            self.lora_config.target_modules = ["query", "key", "value"]
-        elif model_family_name.startswith("DebertaV2Model"):
-            self.lora_config.target_modules = ["query_proj", "key_proj", "value_proj"]
-        elif model_family_name.startswith("ModernBertModel"):
-            self.lora_config.target_modules = ["Wqkv"]
-        elif model_family_name.startswith("NewModel"):
-            self.lora_config.target_modules = ["qkv_proj"]
-        else:
-            raise NotImplementedError
-        if isinstance(self.model, SentenceTransformer) :
-            self.model._first_module().auto_model = get_peft_model(
-                self.model._first_module().auto_model, self.lora_config
-            )
-            self.model._first_module().auto_model.print_trainable_parameters()
-        else:
-            self.model = get_peft_model(self.model, self.lora_config)
-            self.model.print_trainable_parameters()
-
 
 class AbstractEval:
+    """
+    Abstract base class for implementing evaluation pipelines.
+
+    Subclasses must implement:
+        - train(): logic for training the model
+        - test(): logic for evaluating the model
+
+    Attributes:
+        config: An EvalConfig instance holding all config objects.
+        model: The initialized model.
+        tokenizer: The tokenizer instance.
+        dataset: The dataset to evaluate on.
+        dataset_name: The name of the dataset function (if applicable).
+        tr_args: Training arguments (e.g., TrainerArguments).
+        callbacks: Optional callbacks for training.
+        max_length: The maximum sequence length.
+        loss_fn: Loss function to use.
+        loss_kwargs: Keyword arguments for the loss function.
+    """
+
     def __init__(self, config: EvalConfig):
         self.config = config
         self.model = config.model
@@ -198,14 +199,5 @@ class AbstractEval:
         self.tr_args = config.tr_args
         self.callbacks = config.callbacks
         self.max_length = config.max_length
-        self.mteb_kwargs = config.mteb_kwargs
-        self.mlm_probability = config.mlm_probability
-        self.whole_word_masking = config.whole_word_masking
         self.loss_fn = config.loss_fn
         self.loss_kwargs = config.loss_kwargs
-
-    def train(self):
-        raise NotImplementedError
-    
-    def test(self):
-        raise NotImplementedError
