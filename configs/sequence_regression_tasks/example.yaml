@@ -1,0 +1,54 @@
+eval_config:
+  (): encodeval.eval_tasks.EvalConfig
+  task_type: SR
+
+  model_class: !ext transformers.AutoModelForSequenceClassification
+  model_kwargs:
+    pretrained_model_name_or_path: ${EVAL_MODEL_PATH}
+    ft_model_config_dir: 
+    num_labels: 1
+    trust_remote_code: false
+    attn_implementation: sdpa
+    dtype: !ext torch.bfloat16
+    device: cuda
+
+  tokenizer_class: !ext transformers.AutoTokenizer
+  tokenizer_kwargs:
+    pretrained_model_name_or_path: ${EVAL_MODEL_PATH}
+    trust_remote_code: false
+
+  tr_args_class: !ext transformers.TrainingArguments
+  tr_args_kwargs: 
+    output_dir: ./results
+    output_subdir: ""
+    do_train: true
+    do_eval: true
+    do_predict: true
+    report_to: tensorboard
+    train_batch_size: 32
+    per_device_train_batch_size: 4
+    per_device_eval_batch_size: 4
+    learning_rate: 0.00002
+    lr_scheduler_type: linear
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_epsilon: 0.00001
+    warmup_ratio: 0.1
+    weight_decay: 0.01
+    max_steps: 10000
+    seed: 42
+    logging_steps: 10   
+    fp16: false
+    bf16: true
+    eval_strategy: epoch
+    save_strategy: best
+    callbacks:
+      - (): transformers.EarlyStoppingCallback
+        early_stopping_patience: 1
+    save_total_limit: 1
+    load_best_model_at_end: true
+    metric_for_best_model: eval_loss
+    greater_is_better: false
+
+  max_length: 
+  load_dataset_from_custom_fn: !ext optimus.evaluator.dataset.wmt_da_human_evaluation_src_ref_mt
