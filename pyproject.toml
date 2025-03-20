@@ -18,14 +18,16 @@ classifiers = [
   "Operating System :: OS Independent"
 ]
 dependencies = [
-  "configue==6.0.0",
-  "datasets==3.3.2",
+  "accelerate==0.34.2";
+  "configue==5.0.0",
+  "datasets==2.21.0",
   "fire==0.6.0",
-  "numpy==2.2.4",
+  "numpy==1.26.3",
   "pandas==2.2.3",
   "sentence-transformers==3.4.1",
+  "tensorboard==2.18.0",
   "torch==2.4.1",
-  "transformers==4.49.0",
+  "transformers==4.48.3",
 ]
 
 [project.optional-dependencies]
