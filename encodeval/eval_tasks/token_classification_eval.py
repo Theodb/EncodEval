@@ -1,7 +1,6 @@
 from typing import Dict, List, Union
 
 import torch
-from sklearn.metrics import precision_score, recall_score, f1_score
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import DataCollatorForTokenClassification, Trainer
@@ -11,27 +10,26 @@ from .abstract_eval import AbstractEval
 
 class TokenClassificationEval(AbstractEval):
     """
-    Evaluation and training logic for token-level classification tasks 
-    (e.g., Named Entity Recognition, Part-of-Speech tagging).
+    Evaluation and training class for token-level classification tasks 
+    such as Named Entity Recognition (NER) and Part-of-Speech (POS) tagging.
     """
 
     def train(self) -> None:
         """
-        Train the token classification model using the training dataset,
-        with optional evaluation on a validation set. Saves the model unless `do_predict` is True.
+        Fine-tunes the token classification model using the training dataset.
+
+        If evaluation is enabled, the validation set is also used. The model is saved to disk 
+        unless `do_predict` is True.
         """
         print("Tokenizing training dataset")
         tokenization_fn = self.get_tokenization_fn()
-
         train_dataset = self.dataset["train"].map(tokenization_fn, batched=True, load_from_cache_file=False)
-        label_list = train_dataset.features["tags"].feature.names
 
-        # Keep only the required columns
         train_dataset = train_dataset.remove_columns(
             [f for f in train_dataset.features if f not in ["input_ids", "attention_mask", "labels"]]
         )
 
-        # Tokenize validation data if eval is enabled
+        # Tokenize validation data if enabled
         if self.tr_args.eval_strategy != "no":
             val_dataset = self.dataset["validation"]
             val_dataset = val_dataset.map(tokenization_fn, batched=True, load_from_cache_file=False)
@@ -65,35 +63,42 @@ class TokenClassificationEval(AbstractEval):
             trainer.save_model(self.tr_args.output_dir)
 
     def validate(self) -> Dict[str, Dict[str, Union[float, List[float]]]]:
-        """Run evaluation on the validation set."""
+        """
+        Evaluates the model on the validation set.
+
+        Returns:
+            Dict containing per-token and per-subtoken predictions and labels.
+        """
         print("Evaluating on validation dataset")
         return self.evaluate("validation")
-    
+
     def test(self) -> Dict[str, Dict[str, Union[float, List[float]]]]:
-        """Run evaluation on the test set."""
+        """
+        Evaluates the model on the test set.
+
+        Returns:
+            Dict containing per-token and per-subtoken predictions and labels.
+        """
         print("Evaluating on test dataset")
         return self.evaluate("test")
 
     def evaluate(self, split) -> Dict[str, Dict[str, Union[float, List[float]]]]:
         """
-        Evaluate the model on the specified dataset split.
+        Evaluates the model on a given dataset split.
 
         Args:
             split (str): Either "validation" or "test".
 
         Returns:
-            Dict[str, Dict[str, Union[float, List[float]]]]: 
-                Dictionary containing per-instance token/subtoken-level predictions and labels.
+            Dict containing per-instance predictions and labels at both token and subtoken levels.
         """
         print(f"Tokenizing {split} dataset")
         tokenization_fn = self.get_tokenization_fn()
 
         eval_dataset = self.dataset[split].map(tokenization_fn, batched=True, load_from_cache_file=False)
-        label_list = eval_dataset.features["tags"].feature.names
         subsets = eval_dataset["subset"] if "subset" in eval_dataset.column_names else None
         token_ids = eval_dataset["token_ids"]
 
-        # Remove irrelevant fields before loading
         eval_dataset = eval_dataset.remove_columns(
             [f for f in eval_dataset.features if f not in ["input_ids", "attention_mask", "labels"]]
         )
@@ -119,7 +124,6 @@ class TokenClassificationEval(AbstractEval):
                 predictions += preds.tolist()
                 labels += batch["labels"].cpu().tolist()
 
-        # Map subtoken predictions and labels back to original token positions
         predictions_subtoken, labels_subtoken, predictions_token, labels_token = (
             self.sanitize_predictions_labels(predictions, labels, token_ids)
         )
@@ -130,17 +134,18 @@ class TokenClassificationEval(AbstractEval):
             "prediction_subtoken": predictions_subtoken,
             "labels_subtoken": labels_subtoken,
         }
+
         if subsets is not None:
             metrics_per_instance["subset"] = subsets
 
         return {
-            "average": None,  # TODO: Add dataset-level metrics
+            "average": None,  # TODO: Add dataset-level metrics (e.g., F1)
             "per_instance": metrics_per_instance,
         }
 
     def get_tokenization_fn(self):
         """
-        Select tokenization function depending on model class name.
+        Returns the appropriate tokenization function depending on the model class.
 
         Returns:
             Callable: Tokenization function.
@@ -152,13 +157,13 @@ class TokenClassificationEval(AbstractEval):
 
     def standard_tokenization_fn(self, examples):
         """
-        Tokenization for standard models, aligns subtoken labels with input tokens.
+        Standard tokenization for token-level tasks, including subtoken-to-token label alignment.
 
         Args:
-            examples (Dict): Dictionary of tokenized examples with tags.
+            examples (Dict): Dictionary with 'tokens' and 'tags'.
 
         Returns:
-            Dict: Tokenized input with aligned subtoken labels and token ID mapping.
+            Dict: Tokenized inputs with aligned labels and token indices.
         """
         sentences = [" ".join(tokens) for tokens in examples["tokens"]]
         tokenized_inputs = self.tokenizer(
@@ -209,13 +214,13 @@ class TokenClassificationEval(AbstractEval):
 
     def eurobert_tokenization_fn(self, examples):
         """
-        Tokenization for EuroBERT-like models (adds EOS tokens, disables special tokens).
+        Tokenization for EuroBERT models with EOS tokens and label alignment.
 
         Args:
-            examples (Dict): Dictionary of token sequences with tags.
+            examples (Dict): Dictionary with 'tokens' and 'tags'.
 
         Returns:
-            Dict: Tokenized and aligned labels/tokens with EOS-appended sentences.
+            Dict: Tokenized inputs with aligned labels and token indices.
         """
         sentences = [" ".join(tokens) for tokens in examples["tokens"]]
         tokenized_inputs = self.tokenizer(
@@ -267,34 +272,38 @@ class TokenClassificationEval(AbstractEval):
 
     def sanitize_predictions_labels(self, predictions, labels, token_ids):
         """
-        Clean predictions and labels by filtering out ignored tokens (-100) and
-        aggregating predictions at both subtoken and token levels.
+        Cleans and aggregates model predictions and labels.
+
+        Filters out ignored subtoken positions and aggregates subtoken predictions to token-level predictions
+        using majority vote.
 
         Args:
-            predictions (List[List[int]]): Subtoken-level predictions.
-            labels (List[List[int]]): Subtoken-level ground truth labels.
-            token_ids (List[List[int]]): Mapping from subtokens to token indices.
+            predictions (List[List[int]]): Subtoken-level predicted labels.
+            labels (List[List[int]]): Subtoken-level gold labels.
+            token_ids (List[List[int]]): Mapping of subtokens to token indices.
 
         Returns:
-            Tuple: Subtoken and token-level (predictions, labels)
+            Tuple:
+                - predictions_subtoken (List[List[int]])
+                - labels_subtoken (List[List[int]])
+                - predictions_token (List[List[int]])
+                - labels_token (List[List[int]])
         """
         predictions_subtoken, labels_subtoken = [], []
         predictions_token, labels_token = [], []
 
         for preds, labs, tok_ids in zip(predictions, labels, token_ids):
-            # Subtoken level: filter out ignored positions
             predictions_subtoken.append([pred for pred, lab in zip(preds, labs) if lab != -100])
             labels_subtoken.append([lab for lab in labs if lab != -100])
 
-            # Token level: aggregate by majority vote per token
             unique_tok_ids = sorted(list(set(tok_ids) - {-100}))
             preds_token, labs_token = [], []
 
             for tok_id in unique_tok_ids:
                 preds_for_token = [pred for pred, _id in zip(preds, tok_ids) if _id == tok_id]
                 labs_for_token = [lab for lab, _id in zip(labs, tok_ids) if _id == tok_id]
-                preds_token.append(max(set(preds_for_token), key=preds_for_token.count))  # majority vote
-                labs_token.append(labs_for_token[0])  # first label for the token (assumes consistency)
+                preds_token.append(max(set(preds_for_token), key=preds_for_token.count))
+                labs_token.append(labs_for_token[0])
 
             predictions_token.append(preds_token)
             labels_token.append(labs_token)

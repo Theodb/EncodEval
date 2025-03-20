@@ -8,6 +8,7 @@ version = "0.9"
 authors = [
   { name = "Hippolyte Gisserot-Boukhlef", email = "hippolte.gisserotboukhlef@gmail.com" },
   { name = "Nicolas Boizard", email = "nicolas.bzrd@gmail.com" },
+  { name = "Duarte Alves", email = "duartemalves@tecnico.ulisboa.pt" },
 ]
 description = "Library to fine-tune and evaluate general purpose pre-trained encoder models."
 readme = "README.md"

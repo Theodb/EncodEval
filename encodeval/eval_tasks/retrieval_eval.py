@@ -12,14 +12,16 @@ from .abstract_eval import AbstractEval
 
 class RetrievalEval(AbstractEval):
     """
-    Evaluation class for training and evaluating sentence retrieval models.
-    Inherits from AbstractEval and implements training and evaluation for information retrieval tasks.
+    Evaluation class for sentence retrieval models.
+
+    Implements training and evaluation logic for information retrieval tasks using dense embedding models.
+    Inherits from AbstractEval.
     """
 
     def train(self) -> None:
         """
-        Train the retrieval model using the training dataset and optional validation dataset.
-        Saves the model to the output directory after training (if not evaluating).
+        Fine-tunes the retrieval model using the training set, with optional evaluation on the validation set.
+        Saves the model after training if prediction is not requested.
         """
         train_dataset = self.dataset["train"]
 
@@ -68,33 +70,33 @@ class RetrievalEval(AbstractEval):
 
     def validate(self) -> Dict[str, List]:
         """
-        Evaluate the model on the validation split.
+        Evaluates the model on the validation split.
 
         Returns:
-            Dict[str, List]: Average and per-instance evaluation metrics.
+            Dict[str, List]: Dictionary containing average and per-query evaluation metrics.
         """
         print("Evaluating on validation dataset")
         return self.evaluate("validation")
 
     def test(self) -> Dict[str, List]:
         """
-        Evaluate the model on the test split.
+        Evaluates the model on the test split.
 
         Returns:
-            Dict[str, List]: Average and per-instance evaluation metrics.
+            Dict[str, List]: Dictionary containing average and per-query evaluation metrics.
         """
         print("Evaluating on test dataset")
         return self.evaluate("test")
 
     def evaluate(self, split: str) -> Dict[str, List]:
         """
-        General evaluation logic used by both validate and test.
+        Runs retrieval evaluation on the specified dataset split.
 
         Args:
-            split (str): Dataset split to evaluate on, either 'validation' or 'test'.
+            split (str): Name of the dataset split to evaluate ('validation' or 'test').
 
         Returns:
-            Dict[str, List]: Dictionary with averaged metrics and per-instance results.
+            Dict[str, List]: Dictionary with averaged and per-instance evaluation metrics.
         """
         eval_dataset = self.dataset[split]
         queries, corpus, qrels = self.get_queries_corpus_qrels(eval_dataset)
@@ -117,17 +119,14 @@ class RetrievalEval(AbstractEval):
             )
             metrics_per_instance["subset"] = [query_to_subset[query] for query in queries]
 
-        return {
-            "average": {k: np.mean(v) for k, v in metrics_per_instance.items() if k != "subset"},
-            "per_instance": metrics_per_instance,
-        }
+        return metrics_per_instance
 
     def get_tokenization_fn(self):
         """
-        Choose tokenization function based on model type.
+        Selects the appropriate tokenization function based on model type.
 
         Returns:
-            Callable: Tokenization function.
+            Callable: A tokenization function for encoding sequences.
         """
         if self.model.__class__.__name__.startswith("EuroBert"):
             return self.eurobert_tokenization_fn
@@ -136,13 +135,13 @@ class RetrievalEval(AbstractEval):
 
     def standard_tokenization_fn(self, sequences: List) -> torch.Tensor:
         """
-        Standard tokenization function.
+        Applies standard tokenization to input sequences.
 
         Args:
-            sequences (List): List of string sequences.
+            sequences (List[str]): List of input text sequences.
 
         Returns:
-            torch.Tensor: Tokenized tensor input.
+            torch.Tensor: Tokenized input tensor.
         """
         return self.tokenizer(
             sequences,
@@ -154,13 +153,13 @@ class RetrievalEval(AbstractEval):
 
     def eurobert_tokenization_fn(self, sequences: List) -> torch.Tensor:
         """
-        Tokenization function for EuroBERT models (EOS, no BOS).
+        Applies EuroBERT-specific tokenization, appending an EOS token to each sequence.
 
         Args:
-            sequences (List): List of string sequences.
+            sequences (List[str]): List of input text sequences.
 
         Returns:
-            torch.Tensor: Tokenized tensor input with EOS tokens.
+            torch.Tensor: Tokenized input tensor with EOS tokens.
         """
         return self.tokenizer(
             [seq + self.tokenizer.eos_token for seq in sequences],
@@ -172,13 +171,13 @@ class RetrievalEval(AbstractEval):
 
     def get_queries_corpus_qrels(self, eval_dataset):
         """
-        Construct queries, corpus, and relevance labels (qrels) from dataset.
+        Extracts queries, corpus, and relevance labels (qrels) from a dataset.
 
         Args:
-            eval_dataset: HuggingFace dataset with 'anchor', 'positive', and optional 'negative' fields.
+            eval_dataset: A HuggingFace dataset with 'anchor', 'positive', and optional 'negative' fields.
 
         Returns:
-            Tuple[List[str], List[str], Dict[int, Set[int]]]: queries, corpus, qrels
+            Tuple[List[str], List[str], Dict[int, Set[int]]]: Queries, corpus documents, and query-to-relevant-doc mapping.
         """
         queries = sorted(list(set(eval_dataset["anchor"])))
         query_to_id = {query: _id for _id, query in enumerate(queries)}
@@ -211,13 +210,13 @@ class RetrievalEval(AbstractEval):
 
     def encode_sequences(self, sequences: List[str]) -> np.ndarray:
         """
-        Encode a list of text sequences into embeddings using the model.
+        Encodes a list of text sequences into dense vector representations using the model.
 
         Args:
-            sequences (List[str]): List of input texts.
+            sequences (List[str]): Input text sequences.
 
         Returns:
-            np.ndarray: 2D array of embeddings.
+            np.ndarray: Matrix of shape (num_sequences, hidden_size) containing the embeddings.
         """
         sequences_enc = []
         for i in tqdm(
@@ -235,14 +234,14 @@ class RetrievalEval(AbstractEval):
 
     def compute_metrics_instances(self, qrels: Dict[int, set], similarity_matrix: np.ndarray) -> Dict[str, List[float]]:
         """
-        Compute per-query NDCG@10 based on the similarity matrix and ground-truth qrels.
+        Computes NDCG@10 for each query using similarity scores and relevance labels.
 
         Args:
-            qrels (Dict[int, set]): Mapping from query IDs to relevant doc IDs.
-            similarity_matrix (np.ndarray): Query-to-document similarity scores.
+            qrels (Dict[int, set]): Mapping from query IDs to sets of relevant document IDs.
+            similarity_matrix (np.ndarray): Similarity scores between queries and documents.
 
         Returns:
-            Dict[str, List[float]]: Per-query NDCG@10 scores.
+            Dict[str, List[float]]: Dictionary containing per-query NDCG@10 scores.
         """
         ndcgs = []
         for query_id, query_similarities in tqdm(
