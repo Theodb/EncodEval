@@ -18,7 +18,7 @@ classifiers = [
   "Operating System :: OS Independent"
 ]
 dependencies = [
-  "accelerate==0.34.2";
+  "accelerate==0.34.2",
   "configue==5.0.0",
   "datasets==2.21.0",
   "fire==0.6.0",
