@@ -49,6 +49,7 @@ Example usage in Python:
 ```python
 from encodeval.eval_tasks import EvalConfig, SequenceClassificationEval
 
+config_file = "./configs/sequence_classification_tasks/example.yaml"
 eval_config: EvalConfig = configue.load(
     config_file,  
     sub_path="eval_config",
