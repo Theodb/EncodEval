@@ -27,7 +27,7 @@ eval_config:
   # ================================
   tr_args_class: !ext transformers.TrainingArguments  # Training/evaluation argument schema class
   tr_args_kwargs:
-    output_dir: ./results  # Root directory for saving results and model outputs
+    output_dir: ./results/main  # Root directory for saving results and model outputs
     output_subdir: ""  # Optional subdirectory under output_dir
     do_train: true  # Whether to run training
     do_eval: true  # Whether to run evaluation

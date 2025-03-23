@@ -30,7 +30,7 @@ pip install -e .
 ```
 
 
-## Running evaluations
+## Running Evaluations
 
 To run a task evaluation from the command line:
 
@@ -40,8 +40,10 @@ python main.py \
     --model_path <model_path>
 ```
 
+This will generate a `results.json` file with instance-level scores. For analyzing and comparing system-level results, see the [**System Evaluation**](#system-evaluation) section below.
 
-## Task evaluation files
+
+## Task Evaluation Modules
 
 Task-specific evaluation logic is implemented in [`encodeval/eval_tasks/`](encodeval/eval_tasks/). These modules handle both fine-tuning and evaluation.
 
@@ -73,9 +75,35 @@ dataset = xnli()
 ```
 
 
-## Configuration files
+## Configuration Files
 
 Examples of configuration files are available in the [configs/](configs/) folder.
+
+
+## System evaluation
+
+To compare and rank models on a given task, use the `get_results` function. This will:
+* Compute average scores across languages (`average_scores`)
+* Perform statistical testing and calculate Borda counts for rankings (`system_ranking`)
+
+Example usage:
+
+```python
+from encodeval.system_ranking import get_results
+
+average_scores, system_ranking = get_results(
+    base_path="./results/toy",
+    models=["model1", "model2", "model3"], 
+    task_type="SC",
+    dataset="dataset_sc", 
+    valid_langs=["en", "fr"],
+)
+
+print(average_scores)
+print(system_ranking)
+```
+
+*Note: Rankings are based on statistical significance at the 95% confidence level.*
 
 
 ## Citation
