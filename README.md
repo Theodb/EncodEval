@@ -1,4 +1,4 @@
-# EncodEval: Benchmarking Pre-trained Encoders Across Tasks
+# EncodEval: Evaluating Pretrained Encoders Across NLP Tasks with Confidence-Aware Rankings
 
 ## Overview
 
