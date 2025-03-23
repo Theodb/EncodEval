@@ -10,10 +10,10 @@ eval_config:
     model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained or fine-tuned model
     ft_model_config_dir: msmarco_train  # Subdirectory with optional fine-tuning config (e.g., adapters)
     trust_remote_code: false  # Whether to allow loading custom model code from remote sources
-    dtype: !ext torch.bfloat16  # Desired model weights precision (e.g., float32, float16, bfloat16)
-    device: cuda  # Device for model execution (e.g., "cpu", "cuda")
+    dtype: !ext torch.float32  # Desired model weights precision (e.g., float32, float16, bfloat16)
+    device: cpu  # Device for model execution (e.g., "cpu", "cuda")
     model_kwargs:
-      attn_implementation: sdpa  # Specify attention backend (e.g., "eager", "sdpa", "flash")
+      attn_implementation: eager  # Specify attention backend (e.g., "eager", "sdpa", "flash")
 
   # =======================
   # Tokenizer configuration

@@ -11,9 +11,9 @@ eval_config:
     ft_model_config_dir:  # Optional path to model configuration directory
     num_labels: 1  # Number of output labels for regression
     trust_remote_code: false  # Whether to allow loading custom model code from remote sources
-    attn_implementation: sdpa  # Specify attention backend (e.g., "eager", "sdpa", "flash")
-    dtype: !ext torch.bfloat16  # Desired model weights precision (e.g., float32, float16, bfloat16)
-    device: cuda  # Device for model execution (e.g., "cpu", "cuda")
+    attn_implementation: eager  # Specify attention backend (e.g., "eager", "sdpa", "flash")
+    dtype: !ext torch.float32  # Desired model weights precision (e.g., float32, float16, bfloat16)
+    device: cpu  # Device for model execution (e.g., "cpu", "cuda")
 
   # =======================
   # Tokenizer configuration

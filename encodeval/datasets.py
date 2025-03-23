@@ -246,7 +246,7 @@ def math_shepherd() -> DatasetDict:
 
 # Multilingual
 def wmt_da_human_evaluation_src_mt() -> DatasetDict:
-    dataset = load_dataset("RicardoRei/wmt-da-human-evaluation-v1", split="train")
+    dataset = load_dataset("RicardoRei/wmt-da-human-evaluation", split="train")
     valid_lps = sorted(list(set(dataset["lp"]) & set(VALID_LPS)))
     dataset_train, dataset_val, dataset_test = [], [], []
     for lp in tqdm(valid_lps):
@@ -272,7 +272,7 @@ def wmt_da_human_evaluation_src_mt() -> DatasetDict:
     return dataset
 
 def wmt_da_human_evaluation_src_ref_mt() -> DatasetDict:
-    dataset = load_dataset("RicardoRei/wmt-da-human-evaluation-v2", split="train")
+    dataset = load_dataset("RicardoRei/wmt-da-human-evaluation", split="train")
     valid_lps = sorted(list(set(dataset["lp"]) & set(VALID_LPS)))
     dataset_train, dataset_val, dataset_test = [], [], []
     for lp in tqdm(valid_lps):
@@ -298,7 +298,7 @@ def wmt_da_human_evaluation_src_ref_mt() -> DatasetDict:
     return dataset
 
 def summeval_multilingual() -> DatasetDict:
-    dataset = load_dataset("hgissbkh/summeval-multilingual-v3", split="train")
+    dataset = load_dataset("hgissbkh/summeval-multilingual", split="train")
     valid_langs = sorted(list(set(dataset["lang"]) & set(VALID_LANGS)))
     dataset_train, dataset_val, dataset_test = [], [], []
     for lang in tqdm(valid_langs):
