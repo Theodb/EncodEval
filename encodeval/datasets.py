@@ -297,129 +297,7 @@ def wmt_da_human_evaluation_src_ref_mt() -> DatasetDict:
     dataset = dataset.remove_columns(["src", "mt", "ref", "raw", "annotators", "domain", "year"])  
     return dataset
 
-def summeval_multilingual() -> DatasetDict:
-    dataset = load_dataset("hgissbkh/summeval-multilingual", split="train")
-    valid_langs = sorted(list(set(dataset["lang"]) & set(VALID_LANGS)))
-    dataset_train, dataset_val, dataset_test = [], [], []
-    for lang in tqdm(valid_langs):
-        subset = dataset.filter(lambda x: x["lang"] == lang)
-        subset_train_val_test = subset.train_test_split(train_size=0.9, seed=42)
-        subset_train, subset_val_test = subset_train_val_test["train"], subset_train_val_test["test"]
-        subset_val_test = subset_val_test.train_test_split(train_size=0.5, seed=42)
-        subset_val, subset_test = subset_val_test["train"], subset_val_test["test"]
-        dataset_train.append(subset_train)
-        dataset_val.append(subset_val)
-        dataset_test.append(subset_test)
-    dataset = DatasetDict({
-        "train": concatenate_datasets(dataset_train),
-        "validation": concatenate_datasets(dataset_val),
-        "test": concatenate_datasets(dataset_test),
-    })
-    def prepare_dataset(examples):
-        examples_pr = {"text": [], "label": [], "subset": []}
-        for text, summaries, relevances, coherences, fluencies, consistencies, lang in zip(
-            examples["text"], 
-            examples["summaries"], 
-            examples["relevances"], 
-            examples["coherences"], 
-            examples["fluencies"], 
-            examples["consistencies"], 
-            examples["lang"],
-        ):
-            examples_pr["text"] += [f"Text: {text}\nSummary: {summary}" for summary in summaries]
-            examples_pr["label"] += [
-                (relevance + coherence + fluency + consistency) / 4
-                for relevance, coherence, fluency, consistency
-                in zip(relevances, coherences, fluencies, consistencies)
-            ]
-            examples_pr["subset"] += [lang] * len(summaries)
-        return examples_pr
-    dataset = dataset.map(
-        prepare_dataset, 
-        batched=True,
-        remove_columns=["summaries", "relevances", "coherences", "fluencies", "consistencies", "lang"],
-    )
-    return dataset
-
-def summeval_multilingual_summary_first() -> DatasetDict:
-    dataset = load_dataset("hgissbkh/summeval-multilingual", split="train")
-    valid_langs = sorted(list(set(dataset["lang"]) & set(VALID_LANGS)))
-    dataset_train, dataset_val, dataset_test = [], [], []
-    for lang in tqdm(valid_langs):
-        subset = dataset.filter(lambda x: x["lang"] == lang)
-        subset_train_val_test = subset.train_test_split(train_size=0.9, seed=42)
-        subset_train, subset_val_test = subset_train_val_test["train"], subset_train_val_test["test"]
-        subset_val_test = subset_val_test.train_test_split(train_size=0.5, seed=42)
-        subset_val, subset_test = subset_val_test["train"], subset_val_test["test"]
-        dataset_train.append(subset_train)
-        dataset_val.append(subset_val)
-        dataset_test.append(subset_test)
-    dataset = DatasetDict({
-        "train": concatenate_datasets(dataset_train),
-        "validation": concatenate_datasets(dataset_val),
-        "test": concatenate_datasets(dataset_test),
-    })
-    def prepare_dataset(examples):
-        examples_pr = {"text": [], "label": [], "subset": []}
-        for text, summaries, relevances, coherences, fluencies, consistencies, lang in zip(
-            examples["text"], 
-            examples["summaries"], 
-            examples["relevances"], 
-            examples["coherences"], 
-            examples["fluencies"], 
-            examples["consistencies"], 
-            examples["lang"],
-        ):
-            examples_pr["text"] += [f"Summary: {summary}\nText: {text}" for summary in summaries]
-            examples_pr["label"] += [
-                (relevance + coherence + fluency + consistency) / 4
-                for relevance, coherence, fluency, consistency
-                in zip(relevances, coherences, fluencies, consistencies)
-            ]
-            examples_pr["subset"] += [lang] * len(summaries)
-        return examples_pr
-    dataset = dataset.map(
-        prepare_dataset, 
-        batched=True,
-        remove_columns=["summaries", "relevances", "coherences", "fluencies", "consistencies", "lang"],
-    )
-    return dataset
-
 def seahorse() -> DatasetDict:
-    dataset = load_dataset("hgissbkh/seahorse")
-    valid_langs = sorted(list(set(dataset["train"]["lang"]) & set(VALID_LANGS)))
-    dataset = dataset.filter(lambda x: x["lang"] in valid_langs)
-    def prepare_dataset(example):
-        return {
-            "text": f"Text: {example['text']}\nSummary: {example['summary']}",
-            "label": (
-                example["comprehensible"] + 
-                example["repetition"] +
-                example["grammar"] +
-                example["attribution"] +
-                example["main_ideas"] +
-                example["conciseness"]
-            ) / 6,
-            "subset": example["lang"],
-        }
-    dataset = dataset.map(
-        prepare_dataset,
-        remove_columns=[
-            "gem_id",
-            "lang",
-            "model",
-            "summary", 
-            "comprehensible", 
-            "repetition", 
-            "grammar", 
-            "attribution", 
-            "main_ideas", 
-            "conciseness"
-        ],
-    )
-    return dataset
-
-def seahorse_summary_first() -> DatasetDict:
     dataset = load_dataset("hgissbkh/seahorse")
     valid_langs = sorted(list(set(dataset["train"]["lang"]) & set(VALID_LANGS)))
     dataset = dataset.filter(lambda x: x["lang"] in valid_langs)
@@ -458,27 +336,11 @@ def seahorse_summary_first() -> DatasetDict:
 # Token classification
 #=====================
 
-# English
-def ner_en() -> DatasetDict:
-    dataset = load_dataset("hgissbkh/ner")
-    dataset = dataset.filter(lambda x: x["lang"] == "en")
-    dataset = dataset.remove_columns("lang")
-    dataset = dataset.rename_column("words", "tokens")
-    dataset = dataset.rename_column("ner", "tags")
-    return dataset
-
 # Multilingual
 def ner() -> DatasetDict:
     dataset = load_dataset("hgissbkh/ner")
     dataset = dataset.rename_column("words", "tokens")
     dataset = dataset.rename_column("ner", "tags")
-    dataset = dataset.rename_column("lang", "subset")
-    return dataset
-
-def pos() -> DatasetDict:
-    dataset = load_dataset("hgissbkh/pos")
-    dataset = dataset.rename_column("words", "tokens")
-    dataset = dataset.rename_column("pos", "tags")
     dataset = dataset.rename_column("lang", "subset")
     return dataset
 
