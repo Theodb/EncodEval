@@ -325,12 +325,16 @@ def get_test_segment_results_by_subset(base_path, model, task_type, dataset, met
     Returns:
         dict or None: Dictionary mapping each subset to a list of scores.
     """
-    best_hyperparam = get_best_hyperparam(base_path, model, task_type, dataset, metric)
-    if best_hyperparam is None:
-        print("No best hyperparameter found.")
-        return None
+    if "results.json" not in os.listdir(os.path.join(base_path, model, task_type, dataset)):
+        best_hyperparam = get_best_hyperparam(base_path, model, task_type, dataset, metric)
+        if best_hyperparam is None:
+            print("No best hyperparameter found.")
+            return None
+        results_file = os.path.join(base_path, model, task_type, dataset, best_hyperparam, "results.json")
 
-    results_file = os.path.join(base_path, model, task_type, dataset, best_hyperparam, "results.json")
+    else:
+        results_file = os.path.join(base_path, model, task_type, dataset, "results.json")
+    
     try:
         with open(results_file, 'r') as f:
             data = json.load(f)
@@ -435,10 +439,16 @@ def get_system_subsets(base_path, model, task_type, dataset, metric):
     Returns:
         tuple: (predictions_by_subset, labels_by_subset)
     """
-    best_hyperparam = get_best_hyperparam(base_path, model, task_type, dataset, metric)
-    if best_hyperparam is None:
-        return None
-    results = json.load(open(os.path.join(base_path, model, task_type, dataset, best_hyperparam, "results.json")))
+    if "results.json" not in os.listdir(os.path.join(base_path, model, task_type, dataset)):    
+        best_hyperparam = get_best_hyperparam(base_path, model, task_type, dataset, metric)
+        if best_hyperparam is None:
+            return None
+        results_file = os.path.join(base_path, model, task_type, dataset, best_hyperparam, "results.json")
+        
+    else:
+        results_file = os.path.join(base_path, model, task_type, dataset, "results.json")
+
+    results = json.load(open(results_file))
     test_data = results.get("test", {})
     predictions = test_data.get("prediction", [])
     subsets = test_data.get("subset", [])
@@ -575,11 +585,16 @@ def get_system_subsets_token(base_path, model, task_type, dataset, metric):
     Returns:
         tuple: (predictions_by_subset, labels_by_subset)
     """
-    best_hyperparam = get_best_hyperparam(base_path, model, task_type, dataset, metric)
-    if best_hyperparam is None:
-        return None
-
-    results = json.load(open(os.path.join(base_path, model, task_type, dataset, best_hyperparam, "results.json")))
+    if "results.json" not in os.listdir(os.path.join(base_path, model, task_type, dataset)):    
+        best_hyperparam = get_best_hyperparam(base_path, model, task_type, dataset, metric)
+        if best_hyperparam is None:
+            return None
+        results_file = os.path.join(base_path, model, task_type, dataset, best_hyperparam, "results.json")
+        
+    else:
+        results_file = os.path.join(base_path, model, task_type, dataset, "results.json")
+    
+    results = json.load(open(results_file))
     test_data = results.get("test", {})
     predictions = test_data.get("prediction", [])
     subsets = test_data.get("subset", [])

@@ -45,7 +45,7 @@ This will generate a `results.json` file with instance-level scores. For analyzi
 
 ## Task Evaluation Modules
 
-Task-specific evaluation logic is implemented in [`encodeval/eval_tasks/`](encodeval/eval_tasks/). These modules handle both fine-tuning and evaluation.
+Task-specific evaluation logic is implemented in [encodeval/eval_tasks/](encodeval/eval_tasks/). These modules handle both fine-tuning and evaluation.
 
 Example usage in Python:
 ```python
@@ -65,7 +65,7 @@ evaluator.test() # Evaluate on the test set
 
 ## Datasets
 
-Dataset loading and preprocessing are managed in [`encodeval/datasets.py`](encodeval/datasets.py). To add a new dataset, implement the loading logic in this file.
+Dataset loading and preprocessing are managed in [encodeval/datasets.py](encodeval/datasets.py). To add a new dataset, implement the loading logic in this file.
 
 Example (loading the XNLI dataset):
 
@@ -83,6 +83,8 @@ Examples of configuration files are available in the [configs/](configs/) folder
 ## System evaluation
 
 To compare and rank models on a given task, use the `get_results` function. This will:
+
+* Run hyperparameter search on the validation set (if available and if multiple configurations are provided — see [results/toy/](results/toy/) for an example). Otherwise, it simply loads the existing results.
 * Compute average scores across languages (`average_scores`)
 * Perform statistical testing and calculate Borda counts for rankings (`system_ranking`)
 
