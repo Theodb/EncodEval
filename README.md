@@ -10,7 +10,7 @@
 - Information Retrieval (IR)
 
 This repository was used for evaluation in the paper  
-[**EuroBERT: Scaling Multilingual Encoders for European Languages**](https://arxiv.org/abs/2503.05500).
+[EuroBERT: Scaling Multilingual Encoders for European Languages](https://arxiv.org/abs/2503.05500). If you're interested in training the EuroBERT model, please refer to the [EuroBERT repository](https://github.com/Nicolas-BZRD/EuroBERT).
 
 
 ## Installation
