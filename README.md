@@ -40,7 +40,7 @@ python main.py \
     --model_path <model_path>
 ```
 
-This will generate a `results.json` file with instance-level scores. For analyzing and comparing system-level results, see the [**System Evaluation**](#system-evaluation) section below.
+This will generate a `results.json` file with instance-level scores. For analyzing and comparing system-level results, see the [System Evaluation](#system-evaluation) section below.
 
 
 ## Task Evaluation Modules
