@@ -10,7 +10,7 @@ eval_config:
   # ===================
   # Model configuration
   # ===================
-  model_class: !ext transformers.AutoModelForSequenceClassification  # Model class to instantiate
+  model_class: !ext encodeval.modeling_qwen.Qwen3ForSequenceClassification  # Model class to instantiate
   model_kwargs:
     pretrained_model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained or fine-tuned model
     ft_model_config_dir:  # Optional path to model configuration directory
@@ -33,15 +33,15 @@ eval_config:
   # ================================
   tr_args_class: !ext transformers.TrainingArguments  # Training/evaluation argument schema class
   tr_args_kwargs:
-    output_dir: ./results  # Root directory for saving results and model outputs
+    output_dir: ./results
     output_subdir: ""  # Optional subdirectory under output_dir
     do_train: true  # Whether to run training
     do_eval: true  # Whether to run evaluation
     do_predict: true  # Whether to save model predictions
     report_to: tensorboard  # Reporting backend for logging (e.g., "tensorboard", "wandb")
     train_batch_size: 32  # Effective training batch size
-    per_device_train_batch_size: 4  # Training batch size per device
-    per_device_eval_batch_size: 4  # Evaluation batch size per device
+    per_device_train_batch_size: 2  # Training batch size per device
+    per_device_eval_batch_size: 2  # Evaluation batch size per device
     learning_rate: 0.00002  # Learning rate for optimizer
     lr_scheduler_type: linear  # Type of learning rate scheduler
     adam_beta1: 0.9  # β₁ parameter for Adam optimizer
@@ -67,6 +67,6 @@ eval_config:
   # =================
   # Optional settings
   # =================
-  max_length:  # Maximum sequence length for inputs (leave empty to use model default)
-  load_dataset_from_custom_fn: !ext encodeval.datasets.wmt_da_human_evaluation_src_ref_mt  # Custom function to load dataset (e.g., WMT Direct Assessment)
+  max_length: 2048  # Maximum sequence length for inputs (leave empty to use model default)  2048  # Reduced from model default
+  load_dataset_from_custom_fn: !ext encodeval.datasets.seahorse  # Custom function to load dataset (e.g., WMT Direct Assessment)
   

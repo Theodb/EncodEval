@@ -1,13 +1,30 @@
 import os
 import random
 
-from datasets import Dataset, DatasetDict, concatenate_datasets
+from datasets import Dataset, DatasetDict, concatenate_datasets, load_from_disk
 from datasets import get_dataset_config_names as _get_dataset_config_names
 from datasets import get_dataset_split_names as _get_dataset_split_names
 from datasets import load_dataset as _load_dataset
 import pandas as pd
 import random
 from tqdm import tqdm
+
+
+
+# Helper function to check for local language directories
+def get_local_language_dirs(dataset_name, valid_langs):
+    """Check if local language-specific directories exist for a dataset."""
+    if "LOCAL_DATASET_DIR" not in os.environ:
+        return None
+        
+    local_base_path = os.path.join(os.environ['LOCAL_DATASET_DIR'], dataset_name)
+    if not os.path.exists(local_base_path):
+        return None
+        
+    available_langs = [d for d in os.listdir(local_base_path) 
+                       if os.path.isdir(os.path.join(local_base_path, d)) and d in valid_langs]
+    
+    return available_langs if available_langs else None
 
 
 # Wrapper for loading datasets
@@ -21,27 +38,71 @@ def load_dataset(*args, **kwargs) -> DatasetDict:
     
     if "LOCAL_DATASET_DIR" in os.environ:
         print(f"Loading dataset from local storage at {os.environ['LOCAL_DATASET_DIR']}")
-        return _load_dataset(f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}", *args[1:], **kwargs)
-    
+        
+        # Special handling for datasets with configurations
+        if "name" in kwargs and kwargs["name"] is not None:
+            config_name = kwargs["name"]
+            
+            # Try config-specific path first
+            local_path = f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}/{config_name}"
+            if os.path.exists(local_path):
+                print(f"Loading from config path: {local_path}")
+                from datasets import load_from_disk
+                return load_from_disk(local_path)
+            
+            # Try base path if config path doesn't exist
+            local_path = f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}"
+            if os.path.exists(local_path):
+                print(f"Loading from base path: {local_path}")
+                # For this case, we need to filter by the config after loading
+                from datasets import load_from_disk
+                dataset = load_from_disk(local_path)
+                
+                # If it's a DatasetDict and has the split we need
+                if isinstance(dataset, DatasetDict):
+                    return dataset
+                else:
+                    # Wrap single dataset in DatasetDict
+                    return DatasetDict({
+        "train": apply_data_percentage(dataset, "train")})
+            else:
+                raise FileNotFoundError(f"Dataset not found at {local_path}")
+        else:
+            # For datasets without configurations
+            local_path = f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}"
+            if os.path.exists(local_path):
+                print(f"Loading from: {local_path}")
+                from datasets import load_from_disk
+                return load_from_disk(local_path)
+            else:
+                raise FileNotFoundError(f"Dataset not found at {local_path}")
     else:
+        # Original code for online loading
         print("Loading dataset from Hugging Face")
         return _load_dataset(*args, **kwargs)
 
-# Wrapper for getting dataset config names
-def get_dataset_config_names(*args, **kwargs) -> DatasetDict:
+def get_dataset_config_names(*args, **kwargs) -> list:
     dataset_name = args[0].split("/")[-1]
     if "LOCAL_DATASET_DIR" in os.environ:
-        return _get_dataset_config_names(f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}", *args[1:], **kwargs)
-    else:
-        return _get_dataset_config_names(*args, **kwargs)
+        local_path = f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}"
+        if os.path.exists(local_path):
+            try:
+                return _get_dataset_config_names(local_path, *args[1:], **kwargs)
+            except:
+                pass
+    return _get_dataset_config_names(*args, **kwargs)
     
 # Wrapper for getting dataset split names
-def get_dataset_split_names(*args, **kwargs) -> DatasetDict:
+def get_dataset_split_names(*args, **kwargs) -> list:
     dataset_name = args[0].split("/")[-1]
     if "LOCAL_DATASET_DIR" in os.environ:
-        return _get_dataset_split_names(f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}", *args[1:], **kwargs)
-    else:
-        return _get_dataset_split_names(*args, **kwargs)
+        local_path = f"{os.environ['LOCAL_DATASET_DIR']}/{dataset_name}"
+        if os.path.exists(local_path):
+            try:
+                return _get_dataset_split_names(local_path, *args[1:], **kwargs)
+            except:
+                pass
+    return _get_dataset_split_names(*args, **kwargs)
 
 # Train-test split function for retrieval datasets
 def split_retrieval_dataset(dataset, train_size=0.95, seed=42, shard_size=10_000):
@@ -126,7 +187,18 @@ LANG_IDS_DICT_2_TO_FULL = {v: k for k, v in LANG_IDS_DICT_FULL_TO_2.items()}
 # Multilingual
 def xnli() -> DatasetDict:
     config_names = get_dataset_config_names("mteb/xnli")
-    valid_config_names = sorted(list(set(config_names) & set(VALID_LANGS)))
+
+    print(f"DEBUG: Starting xnli function")
+    print(f"DEBUG: VALID_LANGS = {VALID_LANGS}")
+    print(f"DEBUG: Available config_names = {config_names}")
+    
+    # Check for local data
+    local_langs = get_local_language_dirs("xnli", VALID_LANGS)
+    if local_langs:
+        print(f"DEBUG: Found local language directories: {local_langs}")
+        valid_config_names = local_langs
+    else:
+        valid_config_names = sorted(list(set(config_names) & set(VALID_LANGS)))
     dataset_train, dataset_val, dataset_test = [], [], []
     for config_name in tqdm(valid_config_names):
         subset = load_dataset("mteb/xnli", name=config_name) 
@@ -148,7 +220,18 @@ def xnli() -> DatasetDict:
 
 def amazon_reviews_classification() -> DatasetDict:
     config_names = get_dataset_config_names("Samoed/AmazonReviewsClassification")
-    valid_config_names = sorted(list(set(config_names) & set(VALID_LANGS)))
+
+    print(f"DEBUG: Starting amazon_reviews_classification function")
+    print(f"DEBUG: VALID_LANGS = {VALID_LANGS}")
+    print(f"DEBUG: Available config_names = {config_names}")
+    
+    # Check for local data
+    local_langs = get_local_language_dirs("AmazonReviewsClassification", VALID_LANGS)
+    if local_langs:
+        print(f"DEBUG: Found local language directories: {local_langs}")
+        valid_config_names = local_langs
+    else:
+        valid_config_names = sorted(list(set(config_names) & set(VALID_LANGS)))
     dataset_train, dataset_val, dataset_test = [], [], []
     for config_name in tqdm(valid_config_names):
         subset = load_dataset("Samoed/AmazonReviewsClassification", name=config_name) 
@@ -169,23 +252,114 @@ def amazon_reviews_classification() -> DatasetDict:
 
 def amazon_massive_intent() -> DatasetDict:
     config_names = get_dataset_config_names("mteb/amazon_massive_intent")
-    valid_config_names = sorted(list(
-        set([config_name[:2] for config_name in config_names]) & set(VALID_LANGS)
-    ))
-    dataset_train, dataset_val, dataset_test = [], [], []
-    for config_name in tqdm(valid_config_names):
-        config_name = "zh-CN" if config_name == "zh" else config_name
-        subset = load_dataset("mteb/amazon_massive_intent", name=config_name) 
-        subset = subset.map(lambda _: {"lang": "zh"}) if config_name == "zh-CN" else subset
-        dataset_train.append(subset["train"])
-        dataset_val.append(subset["validation"])
-        dataset_test.append(subset["test"])
-    dataset = DatasetDict({
-        "train": concatenate_datasets(dataset_train),
-        "validation": concatenate_datasets(dataset_val),
-        "test": concatenate_datasets(dataset_test),
-    })
-    dataset = dataset.rename_column("lang", "subset")
+    print(f"DEBUG: Starting amazon_massive_intent function")
+    print(f"DEBUG: VALID_LANGS = {VALID_LANGS}")
+    print(f"DEBUG: Available config_names = {config_names}")
+    
+    # Handle case where dataset has 'default' configuration
+    if "LOCAL_DATASET_DIR" in os.environ:
+        local_base_path = f"{os.environ['LOCAL_DATASET_DIR']}/amazon_massive_intent"
+        print(f"DEBUG: Looking for local data at {local_base_path}")
+        
+        # Check what language directories are available locally
+        if os.path.exists(local_base_path):
+            available_langs = [d for d in os.listdir(local_base_path) 
+                             if os.path.isdir(os.path.join(local_base_path, d)) and d in VALID_LANGS]
+            print(f"DEBUG: Available local language directories: {available_langs}")
+            
+            if available_langs:
+                dataset_train, dataset_val, dataset_test = [], [], []
+                
+                for lang in available_langs:
+                    lang_path = os.path.join(local_base_path, lang)
+                    print(f"DEBUG: Loading dataset from {lang_path}")
+                    
+                    try:
+                        from datasets import load_from_disk
+                        lang_dataset = load_from_disk(lang_path)
+                        
+                        # Add language information as 'subset' column
+                        for split in ['train', 'validation', 'test']:
+                            if split in lang_dataset:
+                                lang_dataset[split] = lang_dataset[split].add_column(
+                                    'subset', [lang] * len(lang_dataset[split])
+                                )
+                        
+                        dataset_train.append(lang_dataset['train'])
+                        dataset_val.append(lang_dataset['validation'])
+                        dataset_test.append(lang_dataset['test'])
+                        
+                    except Exception as e:
+                        print(f"DEBUG: Error loading {lang_path}: {e}")
+                        continue
+                
+                if dataset_train:
+                    dataset = DatasetDict({
+                        "train": concatenate_datasets(dataset_train),
+                        "validation": concatenate_datasets(dataset_val),
+                        "test": concatenate_datasets(dataset_test),
+                    })
+                else:
+                    print("DEBUG: Failed to load any local datasets, falling back to online")
+                    dataset = _load_dataset("mteb/amazon_massive_intent")
+            else:
+                print("DEBUG: No valid language directories found locally")
+                dataset = _load_dataset("mteb/amazon_massive_intent")
+        else:
+            print("DEBUG: Local dataset directory not found")
+            dataset = _load_dataset("mteb/amazon_massive_intent")
+    else:
+        # Original online loading logic
+        if config_names == ['default']:
+            print("DEBUG: Using default configuration for amazon_massive_intent")
+            dataset = _load_dataset("mteb/amazon_massive_intent")
+            
+            # Filter by valid languages if the dataset has a language column
+            if 'lang' in dataset['train'].column_names:
+                print("DEBUG: Filtering by language column")
+                dataset_train = dataset['train'].filter(lambda x: x['lang'] in VALID_LANGS)
+                dataset_val = dataset['validation'].filter(lambda x: x['lang'] in VALID_LANGS)
+                dataset_test = dataset['test'].filter(lambda x: x['lang'] in VALID_LANGS)
+                
+                dataset = DatasetDict({
+                    "train": dataset_train,
+                    "validation": dataset_val,
+                    "test": dataset_test,
+                })
+        else:
+            # Original logic for language-specific configurations  
+            valid_config_names = sorted(list(
+                set([config_name[:2] for config_name in config_names]) & set(VALID_LANGS)
+            ))
+            print(f"DEBUG: Valid config names after filtering = {valid_config_names}")
+            
+            if not valid_config_names:
+                print("DEBUG: No valid config names found! Using default configuration as fallback.")
+                dataset = _load_dataset("mteb/amazon_massive_intent")
+            else:
+                dataset_train, dataset_val, dataset_test = [], [], []
+                for config_name in tqdm(valid_config_names):
+                    config_name = "zh-CN" if config_name == "zh" else config_name
+                    subset = _load_dataset("mteb/amazon_massive_intent", name=config_name) 
+                    subset = subset.map(lambda _: {"lang": "zh"}) if config_name == "zh-CN" else subset
+                    dataset_train.append(subset["train"])
+                    dataset_val.append(subset["validation"])
+                    dataset_test.append(subset["test"])
+                
+                dataset = DatasetDict({
+                    "train": concatenate_datasets(dataset_train),
+                    "validation": concatenate_datasets(dataset_val),
+                    "test": concatenate_datasets(dataset_test),
+                })
+    
+    # Rename language column and process labels
+    if 'lang' in dataset['train'].column_names and 'subset' not in dataset['train'].column_names:
+        dataset = dataset.rename_column("lang", "subset")
+    elif 'lang' in dataset['train'].column_names and 'subset' in dataset['train'].column_names:
+        # If both columns exist, remove the 'lang' column to avoid confusion
+        print("DEBUG: Both 'lang' and 'subset' columns exist, removing 'lang' column")
+        dataset = dataset.remove_columns(["lang"])
+    
     labels = sorted(list(
         set(dataset["train"]["label"]) | 
         set(dataset["validation"]["label"]) | 
@@ -195,7 +369,14 @@ def amazon_massive_intent() -> DatasetDict:
         example["label"] = labels.index(example["label"])
         return example
     dataset = dataset.map(get_label)
-    dataset = dataset.remove_columns(["id", "label_text"])
+    
+    # Remove unnecessary columns if they exist
+    columns_to_remove = ["id", "label_text"]
+    existing_columns = dataset["train"].column_names
+    columns_to_remove = [col for col in columns_to_remove if col in existing_columns]
+    if columns_to_remove:
+        dataset = dataset.remove_columns(columns_to_remove)
+    
     return dataset
 
 def paws_x() -> DatasetDict:
@@ -230,7 +411,7 @@ def math_shepherd() -> DatasetDict:
     dataset_train_true = dataset["train"].filter(lambda x: x["label"] == True)
     dataset_train_false = dataset["train"].filter(lambda x: x["label"] == False)
     dataset_train_false = dataset_train_false.shuffle(seed=42).select(range(len(dataset_train_true)))
-    dataset["train"] = concatenate_datasets([dataset_train_true, dataset_train_false]).shuffle(seed=42)
+    dataset["train"] = apply_data_percentage(concatenate_datasets([dataset_train_true, dataset_train_false]).shuffle(seed=42), "train")
     dataset_val_test = dataset["test"].train_test_split(train_size=0.5, seed=42)
     dataset["validation"], dataset["test"] = dataset_val_test["train"],dataset_val_test["test"]
     def get_prompt(example):
@@ -372,41 +553,88 @@ def msmarco() -> DatasetDict:
     )
     dataset["train"], dataset_val_test = split_retrieval_dataset(dataset["train"], train_size=0.9, seed=42)
     dataset["validation"], dataset["test"] = split_retrieval_dataset(dataset_val_test, train_size=0.5, seed=42)
-    dataset["train"] = DatasetDict({"en": dataset["train"]})
+    dataset["train"] = apply_data_percentage(DatasetDict({"en": dataset["train"]}), "train")
     return dataset
 
 # Multilingual
 def miracl() -> DatasetDict:
-    config_names = get_dataset_config_names("sentence-transformers/miracl")
-    valid_config_names = sorted(list(set(config_names) & set(f"{lang}-triplet" for lang in VALID_LANGS)))
+    """Load MIRACL dataset."""
+    print(f"DEBUG: Starting miracl function")
+    print(f"DEBUG: VALID_LANGS = {VALID_LANGS}")
+    
+    # Try to load from local cache first
+    local_dir = os.environ.get('LOCAL_DATASET_DIR', '/lustre/fswork/projects/rech/vrl/uok92vw/data')
+    
     dataset_val, dataset_test = [], []
-    for config_name in tqdm(valid_config_names):
-        subset = load_dataset("sentence-transformers/miracl", name=config_name, split="train")
-        lang = config_name.split("-")[0]
-        subset = subset.add_column("subset", [lang] * len(subset))
-        subset = subset.map(
-            lambda x: {
-                "anchor": f"Query: {x['anchor']}", 
-                "positive": f"Document: {x['positive']}", 
-            },
-            remove_columns=["negative"],
-        )
-        subset_val, subset_test = split_retrieval_dataset(subset, train_size=0.5, seed=42)
-        dataset_val.append(subset_val)
-        dataset_test.append(subset_test)
-    dataset = DatasetDict({
-        "train": None,
-        "validation": concatenate_datasets(dataset_val),
-        "test": concatenate_datasets(dataset_test),
-    })
-    return dataset
-
+    
+    # Load for each valid language
+    for lang in VALID_LANGS:
+        config_name = f"{lang}-triplet"
+        
+        try:
+            # First try local path
+            local_path = os.path.join(local_dir, 'miracl', config_name)
+            if os.path.exists(local_path):
+                print(f"Loading {config_name} from local cache at {local_path}")
+                subset = load_from_disk(local_path)['train']
+            else:
+                # Fall back to HuggingFace
+                print(f"Loading {config_name} from HuggingFace Hub")
+                subset = load_dataset("sentence-transformers/miracl", name=config_name, split="train")
+            
+            # Add language subset column
+            subset = subset.add_column("subset", [lang] * len(subset))
+            
+            # Format the text fields
+            subset = subset.map(
+                lambda x: {
+                    "anchor": f"Query: {x['anchor']}", 
+                    "positive": f"Document: {x['positive']}", 
+                },
+                remove_columns=[col for col in subset.column_names if col not in ['anchor', 'positive', 'subset']],
+            )
+            
+            # Split into validation and test
+            subset_val, subset_test = split_retrieval_dataset(subset, train_size=0.5, seed=42)
+            dataset_val.append(subset_val)
+            dataset_test.append(subset_test)
+            
+        except Exception as e:
+            print(f"Error loading {config_name}: {e}")
+            continue
+    
+    if dataset_val and dataset_test:
+        return DatasetDict({
+        "train": apply_data_percentage(None, "train"),
+            "validation": concatenate_datasets(dataset_val),
+            "test": concatenate_datasets(dataset_test),
+        })
+    else:
+        print("No data loaded for MIRACL")
+        return DatasetDict({
+        "train": apply_data_percentage(None, "train"),
+            "validation": None,
+            "test": None,
+        })
 def mldr() -> DatasetDict:
-    config_names = get_dataset_config_names("sentence-transformers/mldr")
+    # Force getting config names from HuggingFace, not local cache
+    import os
+    temp_local_dir = os.environ.get('LOCAL_DATASET_DIR', None)
+    if temp_local_dir:
+        del os.environ['LOCAL_DATASET_DIR']
+    
+    try:
+        config_names = get_dataset_config_names("sentence-transformers/mldr")
+    finally:
+        if temp_local_dir:
+            os.environ['LOCAL_DATASET_DIR'] = temp_local_dir
     valid_config_names = sorted(list(set(config_names) & set(f"{lang}-triplet" for lang in VALID_LANGS)))
     dataset_val, dataset_test = [], []
     for config_name in tqdm(valid_config_names):
         subset = load_dataset("sentence-transformers/mldr", name=config_name, split="train")
+        # Handle both Dataset and DatasetDict returns
+        if hasattr(subset, "keys") and "train" in subset:
+            subset = subset["train"]
         subset = subset.add_column("subset", [config_name.split("-")[0]] * len(subset))
         subset = subset.map(
             lambda x: {
@@ -497,7 +725,7 @@ def codesearchnet() -> DatasetDict:
     )
     dataset["train"], _ = split_retrieval_dataset(dataset["train"], train_size=0.1, seed=42)
     dataset["validation"], dataset["test"] = split_retrieval_dataset(dataset["train"], train_size=0.5, seed=42)
-    dataset["train"] = None
+    dataset["train"] = apply_data_percentage(None, "train")
     return dataset
 
 def cqadupstack_mathematica() -> DatasetDict:
@@ -530,4 +758,38 @@ def math_formula_retrieval() -> DatasetDict:
     dataset = dataset.rename_column("formula", "anchor")
     dataset = dataset.rename_column("positives", "positive")
     dataset = dataset.remove_columns(["formula_name", "negatives"])
+    return dataset
+
+
+def apply_data_percentage(dataset, split="train"):
+    """
+    Apply data percentage sampling if DATA_PERCENTAGE env var is set.
+    Only applies to training splits.
+    """
+    if split != "train":
+        return dataset
+        
+    data_percentage = os.environ.get("DATA_PERCENTAGE")
+    if data_percentage is None:
+        return dataset
+        
+    try:
+        percentage = int(data_percentage)
+        if percentage <= 0 or percentage >= 100:
+            return dataset
+            
+        # Calculate the number of samples to keep
+        if hasattr(dataset, '__len__'):
+            total_samples = len(dataset)
+            samples_to_keep = max(1, int(total_samples * percentage / 100))
+            
+            print(f"Applying {percentage}% data sampling: keeping {samples_to_keep} out of {total_samples} samples")
+            
+            # Use select to keep only the specified percentage
+            indices = list(range(samples_to_keep))
+            dataset = dataset.select(indices)
+            
+    except (ValueError, TypeError):
+        print(f"Warning: Invalid DATA_PERCENTAGE value: {data_percentage}")
+        
     return dataset

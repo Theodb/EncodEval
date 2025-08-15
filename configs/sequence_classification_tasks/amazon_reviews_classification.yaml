@@ -4,8 +4,8 @@ eval_config:
   # ===================
   languages: ["en"]  # Languages to include in the dataset (e.g., ["en"], ["en", "fr"], or ["en", "es", "fr"])
 
-  (): encodeval.eval_tasks.EvalConfig  # Evaluation configuration class for the sequence regression task
-  task_type: SR  # Type of task (SR = sequence regression)
+  (): encodeval.eval_tasks.EvalConfig  # Evaluation configuration class for the sequence classification task
+  task_type: SC  # Type of task (e.g., IR, SC = sequence classification, regression, etc.)
 
   # ===================
   # Model configuration
@@ -13,12 +13,12 @@ eval_config:
   model_class: !ext transformers.AutoModelForSequenceClassification  # Model class to instantiate
   model_kwargs:
     pretrained_model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained or fine-tuned model
-    ft_model_config_dir:  # Optional path to model configuration directory
-    num_labels: 1  # Number of output labels for regression
+    num_labels: 5  # Number of output labels for classification
     trust_remote_code: true  # Whether to allow loading custom model code from remote sources
     attn_implementation: eager  # Specify attention backend (e.g., "eager", "sdpa", "flash")
     dtype: !ext torch.float32  # Desired model weights precision (e.g., float32, float16, bfloat16)
     device: cuda  # Device for model execution (e.g., "cpu", "cuda")
+    clf_pooling: "late"  # Specify pooling method: "bos", "mean", or "late"
 
   # =======================
   # Tokenizer configuration
@@ -42,14 +42,14 @@ eval_config:
     train_batch_size: 32  # Effective training batch size
     per_device_train_batch_size: 4  # Training batch size per device
     per_device_eval_batch_size: 4  # Evaluation batch size per device
-    learning_rate: 0.00002  # Learning rate for optimizer
+    learning_rate: 0.00002  # Learning rate for optimizer - NOTE: Paper recommends grid search over [1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4]
     lr_scheduler_type: linear  # Type of learning rate scheduler
     adam_beta1: 0.9  # β₁ parameter for Adam optimizer
     adam_beta2: 0.95  # β₂ parameter for Adam optimizer
     adam_epsilon: 0.00001  # Epsilon parameter for numerical stability in Adam optimizer
     warmup_ratio: 0.1  # Fraction of training steps used for LR warmup
-    weight_decay: 0.01  # Weight decay (L2 regularization)
-    max_steps: 1000  # Total number of training steps (overrides num_epochs)
+    weight_decay: 0.1  # Weight decay (L2 regularization)
+    max_steps: 1000  # Total number of training steps (overrides num_epochs) - following paper protocol
     seed: 42  # Random seed for reproducibility
     logging_steps: 10  # Frequency (in steps) for logging metrics
     fp16: false  # Whether to use float16 precision
@@ -68,5 +68,4 @@ eval_config:
   # Optional settings
   # =================
   max_length:  # Maximum sequence length for inputs (leave empty to use model default)
-  load_dataset_from_custom_fn: !ext encodeval.datasets.wmt_da_human_evaluation_src_ref_mt  # Custom function to load dataset (e.g., WMT Direct Assessment)
-  
+  load_dataset_from_custom_fn: !ext encodeval.datasets.amazon_reviews_classification  # Custom function to load dataset (e.g., XNLI)

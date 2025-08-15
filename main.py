@@ -14,10 +14,13 @@ from encodeval.eval_tasks import (
 )
 
 
-def main(config_file: str = None, model_path: str = None):
+def main(config_file: str = None, model_path: str = None, data_percentage: int = None):
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
     os.environ["EVAL_MODEL_PATH"] = model_path
     print(f"Evaluating model at path: {model_path}")
+    if data_percentage is not None:
+        print(f"Using {data_percentage}% of training data")
+        os.environ["DATA_PERCENTAGE"] = str(data_percentage)
     eval_config: EvalConfig = configue.load(config_file, sub_path="eval_config")
     
     # Determine the evaluator based on task type

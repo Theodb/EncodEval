@@ -4,17 +4,16 @@ eval_config:
   # ===================
   languages: ["en"]  # Languages to include in the dataset (e.g., ["en"], ["en", "fr"], or ["en", "es", "fr"])
 
-  (): encodeval.eval_tasks.EvalConfig  # Evaluation configuration class for the sequence regression task
-  task_type: SR  # Type of task (SR = sequence regression)
+  (): encodeval.eval_tasks.EvalConfig  # Evaluation configuration class for the token classification task
+  task_type: TC  # Type of task (e.g., TC = token classification)
 
   # ===================
   # Model configuration
   # ===================
-  model_class: !ext transformers.AutoModelForSequenceClassification  # Model class to instantiate
+  model_class: !ext transformers.AutoModelForTokenClassification  # Model class to instantiate
   model_kwargs:
     pretrained_model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained or fine-tuned model
-    ft_model_config_dir:  # Optional path to model configuration directory
-    num_labels: 1  # Number of output labels for regression
+    num_labels: 9  # Number of output labels for classification
     trust_remote_code: true  # Whether to allow loading custom model code from remote sources
     attn_implementation: eager  # Specify attention backend (e.g., "eager", "sdpa", "flash")
     dtype: !ext torch.float32  # Desired model weights precision (e.g., float32, float16, bfloat16)
@@ -48,7 +47,7 @@ eval_config:
     adam_beta2: 0.95  # β₂ parameter for Adam optimizer
     adam_epsilon: 0.00001  # Epsilon parameter for numerical stability in Adam optimizer
     warmup_ratio: 0.1  # Fraction of training steps used for LR warmup
-    weight_decay: 0.01  # Weight decay (L2 regularization)
+    weight_decay: 0.1  # Weight decay (L2 regularization)
     max_steps: 1000  # Total number of training steps (overrides num_epochs)
     seed: 42  # Random seed for reproducibility
     logging_steps: 10  # Frequency (in steps) for logging metrics
@@ -68,5 +67,4 @@ eval_config:
   # Optional settings
   # =================
   max_length:  # Maximum sequence length for inputs (leave empty to use model default)
-  load_dataset_from_custom_fn: !ext encodeval.datasets.wmt_da_human_evaluation_src_ref_mt  # Custom function to load dataset (e.g., WMT Direct Assessment)
-  
+  load_dataset_from_custom_fn: !ext encodeval.datasets.ner  # Custom function to load dataset (e.g., NER)
