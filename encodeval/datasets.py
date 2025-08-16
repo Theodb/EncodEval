@@ -11,6 +11,22 @@ from tqdm import tqdm
 
 
 
+# Helper function to check for local language directories
+def get_local_language_dirs(dataset_name, valid_langs):
+    """Check if local language-specific directories exist for a dataset."""
+    if "LOCAL_DATASET_DIR" not in os.environ:
+        return None
+        
+    local_base_path = os.path.join(os.environ['LOCAL_DATASET_DIR'], dataset_name)
+    if not os.path.exists(local_base_path):
+        return None
+        
+    available_langs = [d for d in os.listdir(local_base_path) 
+                       if os.path.isdir(os.path.join(local_base_path, d)) and d in valid_langs]
+    
+    return available_langs if available_langs else None
+
+
 # Wrapper for loading datasets
 def load_dataset(*args, **kwargs) -> DatasetDict:
     print(

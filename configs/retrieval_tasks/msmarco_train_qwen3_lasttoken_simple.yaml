@@ -1,0 +1,70 @@
+eval_config:
+  # ===================
+  # Language configuration
+  # ===================
+  languages: ["en"]
+
+  (): encodeval.eval_tasks.EvalConfig
+  task_type: IR
+
+  # ===================
+  # Model configuration with LAST TOKEN pooling
+  # ===================
+  model_class: !ext sentence_transformers.SentenceTransformer
+  model_kwargs:
+    model_name_or_path: ${EVAL_MODEL_PATH}
+    pooling_mode: "lasttoken"  # <-- Simply add this parameter!
+    trust_remote_code: true
+    dtype: !ext torch.float32
+    device: cuda
+    model_kwargs:
+      attn_implementation: eager
+
+  # =======================
+  # Tokenizer configuration
+  # =======================
+  tokenizer_class: !ext transformers.AutoTokenizer
+  tokenizer_kwargs:
+    pretrained_model_name_or_path: ${EVAL_MODEL_PATH}
+    trust_remote_code: true
+
+  # ================================
+  # Training arguments configuration
+  # ================================
+  tr_args_class: !ext sentence_transformers.training_args.SentenceTransformerTrainingArguments
+  tr_args_kwargs:
+    output_dir: ./results
+    output_subdir: ""
+    do_train: true
+    do_eval: false
+    do_predict: false
+    report_to: tensorboard
+    per_device_train_batch_size: 32
+    per_device_eval_batch_size: 4
+    multi_dataset_batch_sampler: proportional
+    learning_rate: 0.00002
+    lr_scheduler_type: linear
+    adam_beta1: 0.9
+    adam_beta2: 0.95
+    adam_epsilon: 0.00001
+    warmup_ratio: 0.1
+    weight_decay: 0.1
+    max_steps: 1000
+    seed: 42
+    logging_steps: 10
+    save_strategy: "no"
+    fp16: false
+    bf16: false
+
+  # ==================
+  # Loss configuration
+  # ==================
+  loss_fn: !ext sentence_transformers.losses.CachedMultipleNegativesRankingLoss
+  loss_kwargs:
+    mini_batch_size: 4
+
+  # =================
+  # Optional settings
+  # =================
+  max_length:
+  load_dataset_from_custom_fn: !ext encodeval.datasets.msmarco_train
