@@ -86,16 +86,18 @@ def create_selective_cleanup_command(model, task_abbrev, dataset_name, lr_value)
     """Create selective cleanup commands for FORCE_OVERWRITE"""
     if not FORCE_OVERWRITE:
         return "# No cleanup - FORCE_OVERWRITE is disabled"
-    
-    lr_str = lr_value.replace('.', '_').replace('-', '_').replace('+', 'p')
-    model_ft = f"{model}_ftlr_{lr_str}"
-    path = f"./results/main/{model_ft}/{task_abbrev}/{dataset_name}"
-    
+    model_path = os.path.join(MODEL_PATH, model)
+    results_path = f"./results/main/{model}/{task_abbrev}/{dataset_name}"
+    weights_path = f"{model_path}/evaluation/weights/{task_abbrev}/{dataset_name}"
+    logs_path = f"{model_path}/evaluation/logs/{task_abbrev}/{dataset_name}"
+
     return f"""
 # FORCE_OVERWRITE: Cleanup of existing results, logs, and weights
 echo "Performing cleanup for {dataset_name} with LR={lr_value}..."
 
-rm -rf "{path}" 2>/dev/null || true
+rm -rf "{results_path}" 2>/dev/null || true
+rm -rf "{weights_path}" 2>/dev/null || true
+rm -rf "{logs_path}" 2>/dev/null || true
 
 echo "Cleanup completed for {dataset_name} (task: {task_abbrev}, lr: {lr_value})"
 """

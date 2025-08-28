@@ -1,4 +1,5 @@
 import os
+import shutil
 from dataclasses import dataclass
 import subprocess
 from typing import Callable, Dict, Literal
@@ -154,9 +155,10 @@ class EvalConfig:
         self.tr_args.logging_dir = f"{os.environ['EVAL_MODEL_PATH']}/evaluation/logs/{output_subdir}"
         self.results_dir = f"{output_dir}/{model_name}/{output_subdir}"
 
-        # Clear old logs if logging directory is not empty
-        if os.path.exists(self.tr_args.logging_dir) and len(os.listdir(self.tr_args.logging_dir)) > 0:
-            subprocess.run(f"rm {self.tr_args.logging_dir}/*", shell=True, check=True)
+        # Clear old logs if logging directory already exists
+        if os.path.exists(self.tr_args.logging_dir):
+            shutil.rmtree(self.tr_args.logging_dir, ignore_errors=True)
+        os.makedirs(self.tr_args.logging_dir, exist_ok=True)
 
     def load_model(self):
         """
