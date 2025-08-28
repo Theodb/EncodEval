@@ -1,0 +1,44 @@
+eval_config:
+  (): encodeval.eval_tasks.EvalConfig  # Evaluation configuration class for the IR task
+  task_type: IR  # Type of task (e.g., IR, classification, regression, etc.)
+
+  # ===================
+  # Model configuration
+  # ===================
+  model_class: !ext sentence_transformers.SentenceTransformer # Model class to instantiate
+  model_kwargs:
+    model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained or fine-tuned model
+    ft_model_config_dir: msmarco_train  # Subdirectory with optional fine-tuning config (e.g., adapters)
+    trust_remote_code: false  # Whether to allow loading custom model code from remote sources
+    dtype: !ext torch.float32  # Desired model weights precision (e.g., float32, float16, bfloat16)
+    device: cpu  # Device for model execution (e.g., "cpu", "cuda")
+    model_kwargs:
+      attn_implementation: eager  # Specify attention backend (e.g., "eager", "sdpa", "flash")
+
+  # =======================
+  # Tokenizer configuration
+  # =======================
+  tokenizer_class: !ext transformers.AutoTokenizer  # Tokenizer class to use (auto-detects architecture)
+  tokenizer_kwargs:
+    pretrained_model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained tokenizer (usually same as model)
+    trust_remote_code: false  # Whether to allow loading tokenizer code from remote
+
+  # ================================
+  # Training arguments configuration
+  # ================================
+  tr_args_class: !ext sentence_transformers.training_args.SentenceTransformerTrainingArguments  # Arguments schema class
+  tr_args_kwargs:
+    output_dir: ./results/main  # Root directory for saving results and model outputs
+    output_subdir: ""  # Optional subdirectory under output_dir
+    do_train: false  # Whether to run training
+    do_eval: true  # Whether to run evaluation
+    do_predict: true  # Whether to save model predictions
+    per_device_eval_batch_size: 4  # Evaluation batch size per device
+    fp16: false  # Whether to use float16 precision
+    bf16: true  # Whether to use bfloat16 precision
+
+  # =================
+  # Optional settings
+  # =================
+  max_length:  # Maximum sequence length for inputs (leave empty to use model default)
+  load_dataset_from_custom_fn: !ext encodeval.datasets.miracl  # Custom function to load evaluation dataset

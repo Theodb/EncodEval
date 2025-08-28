@@ -1,0 +1,64 @@
+eval_config:
+  (): encodeval.eval_tasks.EvalConfig  # Evaluation configuration class for the IR task
+  task_type: IR  # Type of task (e.g., IR, classification, regression, etc.)
+
+  # ===================
+  # Model configuration
+  # ===================
+  model_class: !ext sentence_transformers.SentenceTransformer  # Model class to instantiate
+  model_kwargs:
+    model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained or fine-tuned model
+    trust_remote_code: false  # Whether to allow loading custom model code from remote sources
+    dtype: !ext torch.float32  # Desired model weights precision (e.g., float32, float16, bfloat16)
+    device: cpu  # Device for model execution (e.g., "cpu", "cuda")
+    model_kwargs:
+      attn_implementation: eager  # Specify attention backend (e.g., "eager", "sdpa", "flash")
+
+  # =======================
+  # Tokenizer configuration
+  # =======================
+  tokenizer_class: !ext transformers.AutoTokenizer  # Tokenizer class to use (auto-detects architecture)
+  tokenizer_kwargs:
+    pretrained_model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained tokenizer (usually same as model)
+    trust_remote_code: false  # Whether to allow loading tokenizer code from remote
+
+  # ================================
+  # Training arguments configuration
+  # ================================
+  tr_args_class: !ext sentence_transformers.training_args.SentenceTransformerTrainingArguments  # Arguments schema class
+  tr_args_kwargs:
+    output_dir: ./results/main  # Root directory for saving results and model outputs
+    output_subdir: ""  # Optional subdirectory under output_dir
+    do_train: true  # Whether to run training
+    do_eval: false  # Whether to run evaluation
+    do_predict: false  # Whether to save model predictions
+    report_to: tensorboard  # Reporting backend for logging (e.g., "tensorboard", "wandb")
+    per_device_train_batch_size: 32  # Training batch size per device
+    per_device_eval_batch_size: 4  # Evaluation batch size per device
+    multi_dataset_batch_sampler: proportional  # Strategy for sampling across datasets (e.g., uniform, proportional)
+    learning_rate: 0.00002  # Learning rate for optimizer
+    lr_scheduler_type: linear  # Type of learning rate scheduler
+    adam_beta1: 0.9  # β₁ parameter for Adam optimizer
+    adam_beta2: 0.95  # β₂ parameter for Adam optimizer
+    adam_epsilon: 0.00001  # Epsilon parameter for numerical stability in Adam optimizer
+    warmup_ratio: 0.1  # Fraction of training steps used for LR warmup
+    weight_decay: 0.1  # Weight decay (L2 regularization)
+    max_steps: 1000  # Total number of training steps (overrides num_epochs)
+    seed: 42  # Random seed for reproducibility
+    logging_steps: 10  # Frequency (in steps) for logging metrics
+    save_strategy: "no"  # Strategy for saving model checkpoints (e.g., "no", "steps", "epoch")
+    fp16: false  # Whether to use float16 precision
+    bf16: true  # Whether to use bfloat16 precision
+
+  # ==================
+  # Loss configuration
+  # ==================
+  loss_fn: !ext sentence_transformers.losses.CachedMultipleNegativesRankingLoss  # Loss function class
+  loss_kwargs:  # Loss arguments
+    mini_batch_size: 4  # Batch size for loss computation within larger training batches
+
+  # =================
+  # Optional settings
+  # =================
+  max_length:  # Maximum sequence length for inputs (leave empty to use model default)
+  load_dataset_from_custom_fn: !ext encodeval.datasets.msmarco_train  # Custom function to load training dataset

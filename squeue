@@ -1,0 +1,1 @@
+squeue -u $USER --format="%.10i %.30j %.8T %.10M %.6D %.6C %.10m" | head -10

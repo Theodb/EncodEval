@@ -1,0 +1,65 @@
+eval_config:
+  (): encodeval.eval_tasks.EvalConfig  # Evaluation configuration class for the token classification task
+  task_type: TC  # Type of task (e.g., TC = token classification)
+
+  # ===================
+  # Model configuration
+  # ===================
+  model_class: !ext transformers.AutoModelForTokenClassification  # Model class to instantiate
+  model_kwargs:
+    pretrained_model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained or fine-tuned model
+    num_labels: 9  # Number of output labels for classification
+    trust_remote_code: false  # Whether to allow loading custom model code from remote sources
+    attn_implementation: eager  # Specify attention backend (e.g., "eager", "sdpa", "flash")
+    dtype: !ext torch.float32  # Desired model weights precision (e.g., float32, float16, bfloat16)
+    device: cpu  # Device for model execution (e.g., "cpu", "cuda")
+
+  # =======================
+  # Tokenizer configuration
+  # =======================
+  tokenizer_class: !ext transformers.AutoTokenizer  # Tokenizer class to use (auto-detects architecture)
+  tokenizer_kwargs:
+    pretrained_model_name_or_path: ${EVAL_MODEL_PATH}  # Path to pretrained tokenizer (usually same as model)
+    trust_remote_code: false  # Whether to allow loading tokenizer code from remote
+
+  # ================================
+  # Training arguments configuration
+  # ================================
+  tr_args_class: !ext transformers.TrainingArguments  # Training/evaluation argument schema class
+  tr_args_kwargs:
+    output_dir: ./results/main  # Root directory for saving results and model outputs
+    output_subdir: ""  # Optional subdirectory under output_dir
+    do_train: true  # Whether to run training
+    do_eval: true  # Whether to run evaluation
+    do_predict: true  # Whether to save model predictions
+    report_to: tensorboard  # Reporting backend for logging (e.g., "tensorboard", "wandb")
+    train_batch_size: 32  # Effective training batch size
+    per_device_train_batch_size: 4  # Training batch size per device
+    per_device_eval_batch_size: 4  # Evaluation batch size per device
+    learning_rate: 0.00002  # Learning rate for optimizer
+    lr_scheduler_type: linear  # Type of learning rate scheduler
+    adam_beta1: 0.9  # β₁ parameter for Adam optimizer
+    adam_beta2: 0.95  # β₂ parameter for Adam optimizer
+    adam_epsilon: 0.00001  # Epsilon parameter for numerical stability in Adam optimizer
+    warmup_ratio: 0.1  # Fraction of training steps used for LR warmup
+    weight_decay: 0.1  # Weight decay (L2 regularization)
+    max_steps: 10000  # Total number of training steps (overrides num_epochs)
+    seed: 42  # Random seed for reproducibility
+    logging_steps: 10  # Frequency (in steps) for logging metrics
+    fp16: false  # Whether to use float16 precision
+    bf16: true  # Whether to use bfloat16 precision
+    callbacks:  # List of Trainer callbacks to use
+      - (): transformers.EarlyStoppingCallback  # Early stopping callback based on evaluation metrics
+        early_stopping_patience: 1  # Number of evaluation steps to wait before stopping if no improvement
+    eval_strategy: epoch  # Evaluation frequency (e.g., "epoch", "steps")
+    save_strategy: best  # Strategy for saving model checkpoints (e.g., "no", "steps", "epoch", "best")
+    save_total_limit: 1  # Maximum number of checkpoints to keep
+    load_best_model_at_end: true  # Whether to reload the best model (based on eval metric) at the end
+    metric_for_best_model: eval_loss  # Metric to monitor for best checkpoint selection
+    greater_is_better: false  # Whether a higher metric value indicates a better model
+
+  # =================
+  # Optional settings
+  # =================
+  max_length:  # Maximum sequence length for inputs (leave empty to use model default)
+  load_dataset_from_custom_fn: !ext encodeval.datasets.ner  # Custom function to load dataset (e.g., NER)
